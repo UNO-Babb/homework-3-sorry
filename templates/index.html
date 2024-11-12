@@ -3,59 +3,221 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hexagon Tile Game</title>
+    <title>Octagon Board Game</title>
     <style>
         body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
             font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
+            text-align: center;
+            display: flex;
+            justify-content: flex-start;
+            margin: 0;
         }
-        #board {
+        #gameContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 70%; /* Make space for the rules sidebar */
+            margin-left: 30%; /* Shift the game container to the right */
+        }
+        #rulesContainer {
+            width: 30%;
+            padding: 20px;
+            background-color: #f4f4f4;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            overflow-y: auto;
+        }
+        #octagonBoard {
             display: grid;
-            grid-template-columns: repeat(10, 60px);
-            grid-template-rows: repeat(10, 52px);
-            gap: 2px;
+            grid-template-columns: repeat(9, 60px);
+            grid-template-rows: repeat(9, 52px);
+            gap: 0;
+            margin-top: 20px;
         }
-        .hex {
+        .cell {
             width: 60px;
             height: 52px;
+            clip-path: polygon(
+                25% 0%, 75% 0%, 100% 50%, 
+                75% 100%, 25% 100%, 0% 50%
+            );
             background-color: lightgray;
-            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .outer-cell[data-player="player1"] {
+            background-color: lightblue;
+        }
+        .outer-cell[data-player="player2"] {
+            background-color: lightcoral;
+        }
+        .player {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            position: absolute;
+        }
+        .player1 { background-color: blue; }
+        .player2 { background-color: rgb(255, 0, 0); }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+        #gameState {
+            margin-top: 20px;
+        }
+        h2 {
+            font-size: 20px;
+            margin-bottom: 10px;
         }
     </style>
 </head>
 <body>
 
-<div id="board">
-    <!-- Hexagonal tiles will be added here on clicks -->
-</div>
+    <div id="rulesContainer">
+        <h2>Game Rules</h2>
+        <p><strong>Objective:</strong> The goal of the game is to move your piece around the octagonal board and reach back home first.</p>
+        <p><strong>Game Setup:</strong> Each player starts at their respective home base. Player 1 starts at position [0,3] and Player 2 starts at position [7,5].</p>
+        <p><strong>How to Play:</strong> Players take turns rolling the dice to move their pieces around the board. The oldest player will be player 1.</p>
+        <p><strong>Winning:</strong> The first player to reach their home base wins the game!</p>
+        <p><strong>Special Rule:</strong> If both players land on the same position, the cell turns green.</p>
+    </div>
 
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script>
-    $(document).ready(function() {
-        // Create an empty board of hex tiles
-        for (let i = 0; i < 100; i++) {
-            const hexTile = $('<div class="hex"></div>');
-            hexTile.data("clicked", false);  // Track if a tile has been clicked
-            $('#board').append(hexTile);
+    <div id="gameContainer">
+        <h1>Octagon Board Game</h1>
+        <button onclick="rollDice()">Roll Dice</button>
+
+        <!-- Octagon Board -->
+        <div id="octagonBoard">
+            <!-- Cells will be populated by JavaScript -->
+        </div>
+
+        <!-- Game State Display -->
+        <div id="gameState">
+            <h2>Game State</h2>
+            <p>Loading...</p>
+        </div>
+    </div>
+
+    <script>
+        // Define outer ring positions for an octagon shape in a 9x9 grid
+        const outerPositions = [
+            [0, 2], [0, 3], [0, 4], [0, 5], [0, 6],        // Top edge
+            [1, 1], [1, 7],                                // Top sides
+            [2, 0], [2, 8],                                // Left and Right sides
+            [3, 0], [3, 8],                                // Left and Right sides
+            [4, 0], [4, 8],                                // Left and Right sides
+            [5, 0], [5, 8],                                // Left and Right sides
+            [6, 1], [6, 7],                                // Bottom sides
+            [7, 2], [7, 3], [7, 4], [7, 5], [7, 6]         // Bottom edge
+        ];
+
+        const homeBasePositions = {
+            "player1": [0, 3],  // Player 1's home base position
+            "player2": [7, 5]   // Player 2's home base position
+        };
+
+        let gameState = null;
+
+        async function fetchGameState() {
+            const response = await fetch('/state');
+            gameState = await response.json();
+            renderBoard();
+            displayGameState();
         }
 
-        // Add color to hex tiles on click
-        $('#board').on('click', '.hex', function() {
-            if (!$(this).data("clicked")) {  // Only allow one click per tile
-                $.getJSON('/add_tile', function(data) {
-                    $(this).css('background-color', data.color);
-                    $(this).data("clicked", true);  // Mark as clicked
-                }.bind(this));
+        function renderBoard() {
+            const octagonBoard = document.getElementById('octagonBoard');
+            octagonBoard.innerHTML = ''; // Clear board
+
+            // Create cells in a 9x9 grid layout
+            for (let row = 0; row < 9; row++) {
+                for (let col = 0; col < 9; col++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+
+                    // Check if this cell is part of the octagon's outer positions
+                    const isOuter = outerPositions.some(
+                        pos => pos[0] === row && pos[1] === col
+                    );
+
+                    if (isOuter) {
+                        cell.classList.add('outer-cell');
+                        cell.dataset.position = `${row},${col}`;
+
+                        // Check if both players are on the same position
+                        const player1Pos = gameState.players.player1.position;
+                        const player2Pos = gameState.players.player2.position;
+                        
+                        // If both players are on this cell, make it green
+                        if (player1Pos[0] === row && player1Pos[1] === col &&
+                            player2Pos[0] === row && player2Pos[1] === col) {
+                            cell.style.backgroundColor = 'green'; // Overlapping players (green)
+                        } else {
+                            // Color home bases
+                            if (row === homeBasePositions.player1[0] && col === homeBasePositions.player1[1]) {
+                                cell.classList.add('player1'); // Player 1's home base (blue)
+                            }
+                            if (row === homeBasePositions.player2[0] && col === homeBasePositions.player2[1]) {
+                                cell.classList.add('player2'); // Player 2's home base (red)
+                            }
+                        }
+
+                        // Place player markers if they are on this cell
+                        if (gameState) {
+                            for (const player in gameState.players) {
+                                const pos = gameState.players[player].position;
+                                if (pos[0] === row && pos[1] === col) {
+                                    const playerMarker = document.createElement('div');
+                                    playerMarker.classList.add('player', player);
+                                    playerMarker.textContent = player === 'player1' ? '1' : '2';
+                                    cell.appendChild(playerMarker);
+                                }
+                            }
+                        }
+                    } else {
+                        cell.style.visibility = 'hidden'; // Hide inner cells to keep octagon shape
+                    }
+
+                    octagonBoard.appendChild(cell);
+                }
             }
-        });
-    });
-</script>
+        }
+
+        function displayGameState() {
+            const gameStateDiv = document.getElementById('gameState');
+            
+            // If there's a winner, display who won the game
+            let stateHtml = "";
+            if (gameState.winner) {
+                stateHtml += `<p><strong>${gameState.winner} won the game!</strong></p>`;
+            } else {
+                // Display whose turn it is
+                stateHtml += `<p><strong>${gameState.turn === 'player1' ? "Player 1's Turn!" : "Player 2's Turn!"}</strong></p>`;
+            }
+
+            gameStateDiv.innerHTML = stateHtml;
+        }
+
+        async function rollDice() {
+            const response = await fetch('/roll', { method: 'POST' });
+            const result = await response.json();
+            alert(`You rolled a ${result.steps}. ${result.player} moved to position ${result.position}.`);
+            fetchGameState();
+        }
+
+        // Fetch initial game state on load
+        fetchGameState();
+    </script>
 
 </body>
 </html>
